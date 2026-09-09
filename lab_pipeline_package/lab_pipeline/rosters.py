@@ -18,10 +18,12 @@ from openpyxl.utils import get_column_letter
 from .common import (
     clean_text,
     decode_csv_bytes,
+    delete_row_and_renumber,
     find_col_ws,
     find_header_row_ws,
     normalize_header,
     normalize_student_code,
+    row_as_dict,
 )
 
 
@@ -133,6 +135,35 @@ def save_students_workbook(rows: list[dict[str, str]], out_path: Path) -> Path:
     ws.auto_filter.ref = f"A1:{get_column_letter(ws.max_column)}{ws.max_row}"
     wb.save(out_path)
     return out_path
+
+
+def pop_student_row(lista_path: Path, code: str) -> dict[str, object] | None:
+    """Remove one student's row from a Lista workbook, returning its data.
+
+    Renumbers ``Nro.`` for the rows that remain. Returns ``None`` (leaving the
+    workbook untouched) when ``code`` isn't on this Lista.
+    """
+    lista_path = Path(lista_path)
+    code = normalize_student_code(code)
+
+    wb = load_workbook(lista_path)
+    ws = wb.worksheets[0]
+    header_row = find_header_row_ws(ws)
+    code_col = find_col_ws(ws, header_row, ["Codigo", "Code", "Student ID"])
+    nro_col = find_col_ws(ws, header_row, ["Nro.", "Nro", "Nr", "Numero"], required=False)
+
+    target_row = None
+    for row in range(header_row + 1, ws.max_row + 1):
+        if normalize_student_code(ws.cell(row=row, column=code_col).value) == code:
+            target_row = row
+            break
+    if target_row is None:
+        return None
+
+    row_data = row_as_dict(ws, header_row, target_row)
+    delete_row_and_renumber(ws, header_row, target_row, nro_col)
+    wb.save(lista_path)
+    return row_data
 
 
 # --- the clean Lista workbook -------------------------------------------------

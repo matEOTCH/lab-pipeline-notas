@@ -97,3 +97,50 @@ def find_last_real_header_col(ws, header_row: int) -> int:
         if clean_text(ws.cell(row=header_row, column=col).value):
             return col
     raise ValueError("Could not identify the last real header column.")
+
+
+def row_as_dict(ws, header_row: int, row: int) -> dict[str, object]:
+    """One data row as ``{header: value}``, skipping columns without a header."""
+    result: dict[str, object] = {}
+    for col in range(1, ws.max_column + 1):
+        header = clean_text(ws.cell(row=header_row, column=col).value)
+        if header:
+            result[header] = ws.cell(row=row, column=col).value
+    return result
+
+
+def delete_row_and_renumber(ws, header_row: int, row: int, nro_col: int | None) -> None:
+    """Delete one data row and, if given, renumber ``nro_col`` 1..N for what remains."""
+    ws.delete_rows(row, 1)
+    if not nro_col:
+        return
+    for index, data_row in enumerate(range(header_row + 1, ws.max_row + 1), start=1):
+        ws.cell(row=data_row, column=nro_col).value = index
+
+
+def append_row_dict(ws, header_row: int, row_dict: dict[str, object]) -> int:
+    """Append ``row_dict`` as a new row, adding any headers it has that ``ws`` lacks.
+
+    Existing columns are matched by header text; unknown keys are appended as
+    new columns at the end, so merging in a row from a workbook that has
+    accumulated more columns (e.g. more labs recorded) than the destination
+    still preserves every value instead of dropping it.
+    """
+    columns: dict[str, int] = {}
+    last_col = 0
+    for col in range(1, ws.max_column + 1):
+        header = clean_text(ws.cell(row=header_row, column=col).value)
+        if header:
+            columns[header] = col
+            last_col = col
+
+    for key in row_dict:
+        if key not in columns:
+            last_col += 1
+            ws.cell(row=header_row, column=last_col).value = key
+            columns[key] = last_col
+
+    target_row = ws.max_row + 1
+    for key, value in row_dict.items():
+        ws.cell(row=target_row, column=columns[key]).value = value
+    return target_row

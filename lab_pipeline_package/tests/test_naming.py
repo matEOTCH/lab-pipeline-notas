@@ -16,6 +16,16 @@ def test_lista_and_notas_paths_round_trip(course_root: Path):
     assert naming.section_from_lista_path(lista) == "315"
 
 
+def test_bajas_paths_round_trip(course_root: Path):
+    lista_bajas = naming.bajas_lista_path(course_root, "315")
+    notas_bajas = naming.bajas_notas_path(course_root, "315")
+
+    assert lista_bajas.name == "315-Lista-Bajas.xlsx"
+    assert notas_bajas.name == "315-Notas-Laboratorios-Bajas.xlsx"
+    assert lista_bajas.parent.name == "Bajas"
+    assert notas_bajas.parent.name == "Bajas"
+
+
 def test_create_base_structure_creates_the_three_folders(tmp_path: Path):
     folders = naming.create_base_structure(tmp_path / "curso")
 

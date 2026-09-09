@@ -5,6 +5,7 @@ results. The Flask app, the ipywidgets app and the notebook prompt flows all sit
 on top of these and add nothing but input gathering and presentation.
 """
 
+from .bajas import preview_withdrawal, withdraw_student
 from .grades import (
     apply_absences,
     apply_grade_updates,
@@ -28,5 +29,7 @@ __all__ = [
     "import_teammates",
     "preview_absences",
     "preview_groups",
+    "preview_withdrawal",
     "section_status",
+    "withdraw_student",
 ]

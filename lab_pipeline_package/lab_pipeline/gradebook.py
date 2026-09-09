@@ -22,11 +22,13 @@ from openpyxl.utils import get_column_letter
 from .common import (
     clean_text,
     copy_column_style,
+    delete_row_and_renumber,
     find_col_ws,
     find_header_row_ws,
     find_last_real_header_col,
     normalize_header,
     normalize_student_code,
+    row_as_dict,
 )
 
 
@@ -34,6 +36,8 @@ GROUP_COLOR = "C060C0"
 GRADE_COLOR = "FFFF00"
 RESPONDED_COLOR = "FF5B6B"
 DEFAULT_COLOR = "39A9DB"
+
+_GRADE_COL_RE = re.compile(r"^Nota_Lab(\d+)$")
 
 CODE_ALIASES = ["Codigo", "Code", "Student ID"]
 NAME_ALIASES = ["Nombre Completo", "Apellidos y Nombres", "Name"]
@@ -148,6 +152,35 @@ def read_students(ws, header_row: int) -> list[dict]:
         })
 
     return students
+
+
+def recorded_lab_numbers(ws, header_row: int, row: int) -> list[int]:
+    """Lab numbers where this row already has a grade recorded in ``Nota_LabN``."""
+    numbers = []
+    for col in range(1, ws.max_column + 1):
+        match = _GRADE_COL_RE.match(clean_text(ws.cell(row=header_row, column=col).value))
+        if not match:
+            continue
+        if ws.cell(row=row, column=col).value not in (None, ""):
+            numbers.append(int(match.group(1)))
+    return sorted(numbers)
+
+
+def pop_student_row(ws, header_row: int, students: list[dict], code: str) -> dict[str, object] | None:
+    """Remove one student's row from a Notas worksheet, returning its data.
+
+    Renumbers ``Nro.`` for the rows that remain. Returns ``None`` when ``code``
+    isn't among ``students``.
+    """
+    code = normalize_student_code(code)
+    student = next((item for item in students if item["code"] == code), None)
+    if not student:
+        return None
+
+    nro_col = find_col_ws(ws, header_row, NRO_ALIASES, required=False)
+    row_data = row_as_dict(ws, header_row, student["row"])
+    delete_row_and_renumber(ws, header_row, student["row"], nro_col)
+    return row_data
 
 
 def style_header(ws, header_row: int, col: int, name: str, lab_number: int) -> None:
@@ -335,6 +368,18 @@ class Gradebook:
 
     def refresh_students(self) -> None:
         self.students = read_students(self.ws, self.header_row)
+
+    def recorded_lab_numbers(self, code: str) -> list[int]:
+        student = self.by_code.get(normalize_student_code(code))
+        if not student:
+            return []
+        return recorded_lab_numbers(self.ws, self.header_row, student["row"])
+
+    def pop_student(self, code: str) -> dict[str, object] | None:
+        row_data = pop_student_row(self.ws, self.header_row, self.students, code)
+        if row_data is not None:
+            self.refresh_students()
+        return row_data
 
     def save(self) -> None:
         if self.read_only:

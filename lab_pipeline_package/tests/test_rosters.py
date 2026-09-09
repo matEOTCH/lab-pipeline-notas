@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from openpyxl import load_workbook
 
 from lab_pipeline import naming, rosters
 
@@ -130,6 +131,34 @@ def test_search_by_lastname_initial_filters_and_excludes():
     assert [s["code"] for s in rosters.search_by_lastname_initial(students, "c")] == ["1", "2"]
     assert [s["code"] for s in rosters.search_by_lastname_initial(students, "C", {"1"})] == ["2"]
     assert rosters.search_by_lastname_initial(students, "") == []
+
+
+def test_pop_student_row_removes_and_renumbers(tmp_path: Path, roster_csv: Path):
+    rows = rosters.build_clean_list(rosters.read_blackboard_roster(roster_csv), "aloe.ulima.edu.pe")
+    path = tmp_path / "315-Lista.xlsx"
+    rosters.save_students_workbook(rows, path)
+
+    popped = rosters.pop_student_row(path, "20250003")
+
+    assert popped["Codigo"] == "20250003"
+    assert popped["Nombre Completo"] == "CASTRO, CARLA"
+
+    _, remaining = rosters.parse_student_list(path)
+    assert [student["code"] for student in remaining] == ["20250001", "20250002", "20250004", "20250005", "20250006"]
+
+    ws = load_workbook(path).worksheets[0]
+    nro_values = [ws.cell(row=row, column=1).value for row in range(2, ws.max_row + 1)]
+    assert nro_values == [1, 2, 3, 4, 5]
+
+
+def test_pop_student_row_returns_none_for_unknown_code(tmp_path: Path, roster_csv: Path):
+    rows = rosters.build_clean_list(rosters.read_blackboard_roster(roster_csv), "aloe.ulima.edu.pe")
+    path = tmp_path / "315-Lista.xlsx"
+    rosters.save_students_workbook(rows, path)
+
+    assert rosters.pop_student_row(path, "99999999") is None
+    _, remaining = rosters.parse_student_list(path)
+    assert len(remaining) == 6
 
 
 def test_saved_workbook_lands_where_naming_says(course_root: Path):

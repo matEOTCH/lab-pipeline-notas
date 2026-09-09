@@ -11,6 +11,8 @@ A workspace looks like this::
           Lista/<section>-Lista.xlsx
           Notas/<section>-Notas-Laboratorios.xlsx
           Grupos Laboratorio/<section>/Laboratorio <n>/...
+          Bajas/<section>-Lista-Bajas.xlsx
+          Bajas/<section>-Notas-Laboratorios-Bajas.xlsx
 
 No other module should build these paths by hand.
 """
@@ -28,6 +30,10 @@ DEFAULT_FOLDERS = (NOTAS_FOLDER, LISTA_FOLDER, GROUPS_FOLDER)
 
 LISTA_SUFFIX = "-Lista.xlsx"
 NOTAS_SUFFIX = "-Notas-Laboratorios.xlsx"
+
+BAJAS_FOLDER = "Bajas"
+BAJAS_LISTA_SUFFIX = "-Lista-Bajas.xlsx"
+BAJAS_NOTAS_SUFFIX = "-Notas-Laboratorios-Bajas.xlsx"
 
 IGNORED_PROJECT_NAMES = {"lab_pipeline", "__pycache__", "uploaded_blackboard_csvs", "web_uploads"}
 
@@ -47,6 +53,14 @@ def notas_path(course_root: Path, section: str) -> Path:
 
 def section_from_lista_path(path: Path) -> str:
     return Path(path).name[: -len(LISTA_SUFFIX)].strip()
+
+
+def bajas_lista_path(course_root: Path, section: str) -> Path:
+    return Path(course_root) / BAJAS_FOLDER / f"{section}{BAJAS_LISTA_SUFFIX}"
+
+
+def bajas_notas_path(course_root: Path, section: str) -> Path:
+    return Path(course_root) / BAJAS_FOLDER / f"{section}{BAJAS_NOTAS_SUFFIX}"
 
 
 def create_base_structure(course_root: Path) -> dict[str, Path]:

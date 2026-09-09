@@ -139,6 +139,39 @@ def test_mark_absent_zeroes_the_block_and_formats_the_percentage(notas_path: Pat
     assert ws.cell(row=row, column=tm_col).number_format == gradebook.TM_NUMBER_FORMAT
 
 
+def test_recorded_lab_numbers_reports_labs_with_a_grade(notas_path: Path):
+    with gradebook.Gradebook(notas_path) as book:
+        positions, _ = book.ensure_columns(1)
+        gradebook.apply_grades_by_code(book.ws, book.students, positions["Nota_Lab1"], {"20250001": 18})
+
+    book = gradebook.Gradebook(notas_path, read_only=True)
+    assert book.recorded_lab_numbers("20250001") == [1]
+    assert book.recorded_lab_numbers("20250002") == []
+    assert book.recorded_lab_numbers("99999999") == []
+
+
+def test_pop_student_removes_row_and_renumbers(notas_path: Path):
+    with gradebook.Gradebook(notas_path) as book:
+        positions, _ = book.ensure_columns(1)
+        gradebook.apply_grades_by_code(book.ws, book.students, positions["Nota_Lab1"], {"20250003": 15})
+
+    with gradebook.Gradebook(notas_path) as book:
+        popped = book.pop_student("20250003")
+
+    assert popped["Codigo"] == "20250003"
+    assert popped["Nota_Lab1"] == 15
+
+    book = gradebook.Gradebook(notas_path, read_only=True)
+    assert "20250003" not in book.by_code
+    assert len(book.students) == 5
+    assert [student["nro"] for student in book.students] == [1, 2, 3, 4, 5]
+
+
+def test_pop_student_returns_none_for_unknown_code(notas_path: Path):
+    with gradebook.Gradebook(notas_path) as book:
+        assert book.pop_student("99999999") is None
+
+
 def test_gradebook_context_manager_does_not_save_on_error(notas_path: Path):
     before = notas_path.read_bytes()
     try:

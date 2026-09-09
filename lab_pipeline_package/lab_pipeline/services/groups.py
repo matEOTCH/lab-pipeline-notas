@@ -40,6 +40,20 @@ def remember_section_people(course_root: Path, section: str, professor: str, jef
     store.save(saved)
 
 
+def fixed_groups(course_root: Path, section: str) -> dict[str, int]:
+    """The section's saved fixed grouping ``{code: group_number}``, or ``{}``."""
+    store = settings.lab_group_settings(course_root)
+    saved = store.section(store.load(), section)
+    return {code: int(group) for code, group in saved.get("fixed_groups", {}).items()}
+
+
+def remember_fixed_groups(course_root: Path, section: str, mapping: dict[str, int]) -> None:
+    store = settings.lab_group_settings(course_root)
+    saved = store.load()
+    store.section(saved, section)["fixed_groups"] = {str(code): int(group) for code, group in mapping.items()}
+    store.save(saved)
+
+
 def _ensure_notas_exists(lista_path: Path, notas_path: Path) -> bool:
     """Seed Notas from the Lista when a section predates the Notas workbook."""
     if notas_path.exists():

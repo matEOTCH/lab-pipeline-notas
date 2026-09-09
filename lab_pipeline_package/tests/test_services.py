@@ -387,6 +387,163 @@ def test_a_failure_mid_request_leaves_the_workbook_untouched(lab: dict):
     assert lab["notas_path"].read_bytes() == before
 
 
+# --- bajas ----------------------------------------------------------------
+
+
+def test_withdraw_student_moves_lista_and_notas_rows(section: dict):
+    """``section`` already has a Notas workbook - create_structure seeds it from Lista."""
+    from lab_pipeline import rosters
+
+    result = services.withdraw_student(section["course_root"], "315", "20250003")
+
+    assert result["success"] is True
+    assert result["name"] == "CASTRO, CARLA"
+    assert result["lista_bajas_path"].exists()
+    assert result["notas_bajas_path"] is not None
+    assert result["notas_bajas_path"].exists()
+
+    _, remaining = rosters.parse_student_list(naming.lista_path(section["course_root"], "315"))
+    assert "20250003" not in [student["code"] for student in remaining]
+
+    _, bajas_students = rosters.parse_student_list(result["lista_bajas_path"])
+    assert [student["code"] for student in bajas_students] == ["20250003"]
+
+    book = gradebook.Gradebook(naming.notas_path(section["course_root"], "315"), read_only=True)
+    assert "20250003" not in book.by_code
+
+
+def test_withdraw_student_with_no_notas_workbook_yet(workspace: Path, roster_csv: Path):
+    """When Notas doesn't exist at all, only the Lista side moves."""
+    from lab_pipeline import rosters
+
+    result = services.create_structure(
+        workspace_root=workspace,
+        project_name="2026",
+        course_cycle_name="Quimica General 2026-1",
+        section="315",
+        email_domain="aloe.ulima.edu.pe",
+        csv_path=roster_csv,
+    )
+    result["notas_path"].unlink()
+
+    withdrawal = services.withdraw_student(result["course_root"], "315", "20250003")
+
+    assert withdrawal["lista_bajas_path"].exists()
+    assert withdrawal["notas_bajas_path"] is None
+
+    _, remaining = rosters.parse_student_list(naming.lista_path(result["course_root"], "315"))
+    assert "20250003" not in [student["code"] for student in remaining]
+
+
+def test_withdraw_student_moves_notas_row_too_when_it_exists(lab: dict, section: dict):
+    with gradebook.Gradebook(lab["notas_path"]) as book:
+        positions, _ = book.ensure_columns(1)
+        gradebook.apply_grades_by_code(book.ws, book.students, positions["Nota_Lab1"], {"20250002": 17})
+
+    result = services.withdraw_student(section["course_root"], "315", "20250002")
+
+    assert result["notas_bajas_path"] is not None
+    assert result["notas_bajas_path"].exists()
+
+    book = gradebook.Gradebook(lab["notas_path"], read_only=True)
+    assert "20250002" not in book.by_code
+
+    from openpyxl import load_workbook
+
+    bajas_ws = load_workbook(result["notas_bajas_path"]).active
+    headers = [bajas_ws.cell(row=1, column=col).value for col in range(1, bajas_ws.max_column + 1)]
+    row = dict(zip(headers, [bajas_ws.cell(row=2, column=col).value for col in range(1, bajas_ws.max_column + 1)]))
+    assert row["Codigo"] == "20250002"
+    assert row["Nota_Lab1"] == 17
+
+
+def test_withdraw_unknown_code_raises(section: dict):
+    with pytest.raises(ValueError):
+        services.withdraw_student(section["course_root"], "315", "99999999")
+
+
+def test_preview_withdrawal_reports_recorded_labs(lab: dict, section: dict):
+    with gradebook.Gradebook(lab["notas_path"]) as book:
+        positions, _ = book.ensure_columns(1)
+        gradebook.apply_grades_by_code(book.ws, book.students, positions["Nota_Lab1"], {"20250001": 18})
+
+    preview = services.preview_withdrawal(section["course_root"], "315", "20250001")
+    assert preview == {"code": "20250001", "name": "ALVAREZ, ANA", "recorded_labs": [1]}
+
+    other_preview = services.preview_withdrawal(section["course_root"], "315", "20250002")
+    assert other_preview["recorded_labs"] == []
+
+
+def test_preview_withdrawal_rejects_an_unknown_code(section: dict):
+    with pytest.raises(ValueError):
+        services.preview_withdrawal(section["course_root"], "315", "99999999")
+
+
+def test_withdrawal_reconciles_notas_headers_across_two_labs(section: dict):
+    """A second withdrawal, after more lab columns exist, must not drop the first row's columns."""
+    from openpyxl import load_workbook
+
+    services.create_lab_groups(
+        course_root=section["course_root"], section="315", professor="P", jefe="J",
+        lab_number=1, group_count=2, seed=1,
+    )
+    services.withdraw_student(section["course_root"], "315", "20250001")
+
+    services.create_lab_groups(
+        course_root=section["course_root"], section="315", professor="P", jefe="J",
+        lab_number=2, group_count=2, seed=2,
+    )
+    services.withdraw_student(section["course_root"], "315", "20250002")
+
+    ws = load_workbook(naming.bajas_notas_path(section["course_root"], "315")).active
+    headers = [ws.cell(row=1, column=col).value for col in range(1, ws.max_column + 1)]
+    assert "Grupo_Lab1" in headers
+    assert "Grupo_Lab2" in headers
+    assert ws.max_row == 3
+
+
+# --- fixed groups (groups_csv) ---------------------------------------------
+
+
+def test_fixed_groups_round_trips_through_settings(section: dict):
+    services.groups.remember_fixed_groups(section["course_root"], "315", {"20250001": 2, "20250002": 1})
+
+    assert services.groups.fixed_groups(section["course_root"], "315") == {"20250001": 2, "20250002": 1}
+    assert services.groups.fixed_groups(section["course_root"], "999") == {}
+
+
+def test_create_lab_groups_places_students_as_the_imported_csv_specifies(section: dict, tmp_path: Path):
+    from lab_pipeline import groups_csv
+
+    csv_path = tmp_path / "grupos.csv"
+    csv_path.write_text(
+        "Group Code*,User Name*\n"
+        "Grupo_gc_Lab1_1,20250001\n"
+        "Grupo_gc_Lab1_1,20250002\n"
+        "Grupo_gc_Lab1_2,20250003\n",
+        encoding="utf-8",
+    )
+    forced = groups_csv.parse_groups_csv(csv_path)
+    assert forced == {"20250001": 1, "20250002": 1, "20250003": 2}
+
+    result = services.create_lab_groups(
+        course_root=section["course_root"],
+        section="315",
+        professor="P",
+        jefe="J",
+        lab_number=1,
+        group_count=2,
+        forced_assignments=forced,
+        seed=3,
+    )
+
+    book = gradebook.Gradebook(result["notas_path"], read_only=True)
+    lookup = book.group_lookup(1)
+    assert lookup["20250001"] == 1
+    assert lookup["20250002"] == 1
+    assert lookup["20250003"] == 2
+
+
 # --- status -------------------------------------------------------------------
 
 

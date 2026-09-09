@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .. import colab, grouping, naming, rosters
+from .. import colab, groups_csv, grouping, naming, rosters
 from ..services import groups as groups_service
-from . import prompts
+from . import bajas_flow, prompts
 
 
 def ask_section_people(course_root: Path, section: str) -> tuple[str, str]:
@@ -52,6 +52,67 @@ def ask_forced_assignments(students: list[dict], group_count: int) -> dict[str, 
     return forced
 
 
+def _filter_to_current_students(mapping: dict[str, int], students: list[dict]) -> dict[str, int]:
+    """Drop any code no longer on the roster (e.g. a recent baja), with a warning."""
+    current_codes = {student["code"] for student in students}
+    filtered = {code: group for code, group in mapping.items() if code in current_codes}
+    dropped = len(mapping) - len(filtered)
+    if dropped:
+        print(f"Aviso: se ignoraron {dropped} codigo(s) que ya no estan en la lista de la seccion.")
+    return filtered
+
+
+def ask_group_mode(course_root: Path, section: str) -> str:
+    has_saved = bool(groups_service.fixed_groups(course_root, section))
+    print("\nComo se van a asignar los grupos para este laboratorio?")
+    print("  (1) Aleatorio")
+    print("  (2) Importar CSV de grupos ya creados (fijos)")
+    if has_saved:
+        print("  (3) Reusar los grupos fijos ya guardados para esta seccion")
+    options = {"1", "2", "3"} if has_saved else {"1", "2"}
+    mode = input("Seleccione modo: ").strip()
+    if mode not in options:
+        raise ValueError("Modo invalido.")
+    return mode
+
+
+def ask_group_assignment(course_root: Path, section: str, students: list[dict]) -> tuple[int, dict[str, int]]:
+    """Returns ``(group_count, forced_assignments)`` for whichever mode was chosen."""
+    mode = ask_group_mode(course_root, section)
+
+    if mode == "2":
+        csv_path = colab.upload_file(
+            "Suba el CSV de grupos (exportado de Blackboard, o el members_csv de esta herramienta).",
+            folder=Path.cwd() / "uploaded_group_csvs",
+            accept=".csv,.xls",
+        )
+        forced_assignments = _filter_to_current_students(groups_csv.parse_groups_csv(csv_path), students)
+        group_count = prompts.ask_int(
+            "Cuantos grupos se van a crear?",
+            minimum=1,
+            maximum=grouping.MAX_GROUPS,
+            default=max(forced_assignments.values()) if forced_assignments else grouping.MAX_GROUPS,
+        )
+        groups_service.remember_fixed_groups(course_root, section, forced_assignments)
+        return group_count, forced_assignments
+
+    if mode == "3":
+        forced_assignments = _filter_to_current_students(groups_service.fixed_groups(course_root, section), students)
+        group_count = prompts.ask_int(
+            "Cuantos grupos se van a crear?",
+            minimum=1,
+            maximum=grouping.MAX_GROUPS,
+            default=max(forced_assignments.values()) if forced_assignments else grouping.MAX_GROUPS,
+        )
+        return group_count, forced_assignments
+
+    group_count = prompts.ask_int(
+        "Cuantos grupos se van a crear?", minimum=1, maximum=grouping.MAX_GROUPS, default=grouping.MAX_GROUPS
+    )
+    forced_assignments = ask_forced_assignments(students, group_count)
+    return group_count, forced_assignments
+
+
 def run_once(
     seed: int | None = None,
     project_root: Path | None = None,
@@ -73,12 +134,13 @@ def run_once(
     print(f"\nSeccion seleccionada: {section}")
     print(f"Estudiantes cargados: {len(students)}")
 
+    bajas_flow.ask_withdrawals(course_root, section, students)
+    _, students = rosters.parse_student_list(naming.lista_path(course_root, section))
+    print(f"Estudiantes activos tras bajas: {len(students)}")
+
     professor, jefe = ask_section_people(course_root, section)
     lab_number = prompts.ask_int("Numero de laboratorio, ejemplo 1, 2, 3", minimum=1)
-    group_count = prompts.ask_int(
-        "Cuantos grupos se van a crear?", minimum=1, maximum=grouping.MAX_GROUPS, default=grouping.MAX_GROUPS
-    )
-    forced_assignments = ask_forced_assignments(students, group_count)
+    group_count, forced_assignments = ask_group_assignment(course_root, section, students)
 
     result = groups_service.create_lab_groups(
         course_root=course_root,
