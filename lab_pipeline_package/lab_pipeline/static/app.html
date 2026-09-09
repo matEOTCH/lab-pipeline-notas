@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lab Manager - Quimica General</title>
+  <style>
+    :root {
+      --blue: #1f4e78;
+      --cyan: #12b5c9;
+      --green: #1f9d55;
+      --red: #d64545;
+      --ink: #17212b;
+      --muted: #65758b;
+      --line: #d9e2ec;
+      --bg: #f4f7fb;
+      --panel: #ffffff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+    header {
+      background: linear-gradient(135deg, #1f4e78, #276b96);
+      color: white;
+      padding: 22px 28px;
+      border-bottom: 1px solid #173956;
+    }
+    header h1 { margin: 0; font-size: 28px; }
+    header p { margin: 6px 0 0; color: #dbeaf6; }
+    .shell { display: grid; grid-template-columns: 280px 1fr; min-height: calc(100vh - 86px); }
+    nav {
+      background: #ffffff;
+      border-right: 1px solid var(--line);
+      padding: 18px;
+      position: sticky;
+      top: 0;
+      height: calc(100vh - 86px);
+    }
+    nav button {
+      width: 100%;
+      border: 0;
+      background: transparent;
+      text-align: left;
+      padding: 12px 13px;
+      margin-bottom: 6px;
+      border-radius: 8px;
+      font-weight: 700;
+      color: #334e68;
+      cursor: pointer;
+    }
+    nav button.active, nav button:hover { background: #e8f2fb; color: var(--blue); }
+    main { padding: 22px; }
+    .screen { display: none; }
+    .screen.active { display: block; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+    .card, .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 14px;
+      box-shadow: 0 1px 2px rgba(16, 42, 67, .05);
+    }
+    .card h3, .panel h2, .panel h3 { margin: 0 0 8px; }
+    .muted { color: var(--muted); font-size: 13px; }
+    .step { display: inline-block; color: var(--blue); font-weight: 800; font-size: 12px; text-transform: uppercase; margin-bottom: 6px; }
+    label { display: block; font-weight: 700; margin: 10px 0 5px; }
+    input, select, textarea {
+      width: 100%;
+      border: 1px solid #bcccdc;
+      border-radius: 7px;
+      padding: 10px;
+      background: white;
+      color: var(--ink);
+      font: inherit;
+    }
+    textarea { min-height: 96px; resize: vertical; }
+    .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+    .btn {
+      border: 0;
+      border-radius: 7px;
+      padding: 10px 14px;
+      font-weight: 800;
+      cursor: pointer;
+      background: var(--cyan);
+      color: white;
+    }
+    .btn.secondary { background: #486581; }
+    .btn.green { background: var(--green); }
+    .btn.red { background: var(--red); }
+    .status {
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: #f8fbff;
+      padding: 12px;
+      margin-top: 12px;
+      white-space: pre-wrap;
+    }
+    .status.ok { background: #effcf4; border-color: #a8e6bd; }
+    .status.err { background: #fff1f1; border-color: #f2a9a9; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; background: white; }
+    th, td { border-bottom: 1px solid var(--line); padding: 8px; text-align: left; font-size: 13px; }
+    th { color: #334e68; background: #f0f4f8; }
+    .help {
+      background: #fffbea;
+      border: 1px solid #f0d36a;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 14px;
+    }
+    .pill { display: inline-block; background: #e8f2fb; color: var(--blue); padding: 4px 8px; border-radius: 999px; font-size: 12px; font-weight: 800; }
+    @media (max-width: 850px) {
+      .shell { grid-template-columns: 1fr; }
+      nav { height: auto; position: relative; display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+      nav button { margin: 0; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Lab Manager - Quimica General</h1>
+    <p>Aplicacion visual para crear estructura, grupos, evaluacion, ausentes y outputs sin pelearse con celdas de notebook.</p>
+  </header>
+  <div class="shell">
+    <nav>
+      <button class="active" data-screen="dashboard">Centro de control</button>
+      <button data-screen="structure">Crear estructura</button>
+      <button data-screen="groups">Crear grupos</button>
+      <button data-screen="evaluation">Subir notas</button>
+      <button data-screen="absences">Ausentes</button>
+      <button data-screen="outputs">Outputs</button>
+      <button data-screen="guide">Guia</button>
+    </nav>
+    <main>
+      <section id="dashboard" class="screen active">
+        <div class="panel">
+          <span class="step">Resumen</span>
+          <h2>Centro de control docente</h2>
+          <p class="muted">Detecta proyectos, cursos, secciones, laboratorios generados y archivos disponibles en tu Drive.</p>
+          <div class="actions"><button class="btn" onclick="loadStatus()">Actualizar estado</button></div>
+          <div id="statusCards" class="grid"></div>
+          <div id="dashboardOut" class="status"></div>
+        </div>
+      </section>
+
+      <section id="structure" class="screen">
+        <div class="help"><b>CSV de Blackboard:</b> Descargar desde Estadisticas -> Actividad del curso -> boton de descarga. Debe contener Apellido, Nombre y Nombre de usuario.</div>
+        <div class="panel">
+          <span class="step">Paso 1-7</span>
+          <h2>Crear estructura, Lista y Notas</h2>
+          <div class="row">
+            <div><label>Proyecto</label><input id="sProject" placeholder="2026"></div>
+            <div><label>Curso/ciclo</label><input id="sCourse" placeholder="Quimica General 2026-1"></div>
+            <div><label>Seccion</label><input id="sSection" placeholder="315"></div>
+            <div><label>Dominio institucional</label><input id="sDomain" value="aloe.ulima.edu.pe"></div>
+          </div>
+          <label><input id="sOverwrite" type="checkbox" style="width:auto"> Sobrescribir si ya existe</label>
+          <label>CSV Blackboard</label><input id="sCsv" type="file" accept=".csv">
+          <div class="actions">
+            <button class="btn secondary" onclick="previewStructure()">Previsualizar lista</button>
+            <button class="btn green" onclick="createStructure()">Crear estructura</button>
+          </div>
+          <div id="structureOut" class="status"></div>
+          <div id="structurePreview"></div>
+        </div>
+      </section>
+
+      <section id="groups" class="screen">
+        <div class="help">Primero crea la estructura. Luego selecciona seccion, fija alumnos especiales si hace falta, previsualiza y genera PDF/CSVs/ZIP.</div>
+        <div class="panel">
+          <span class="step">Grupos</span>
+          <h2>Crear grupos de laboratorio</h2>
+          <div class="row">
+            <div><label>Proyecto</label><select id="gProject"></select></div>
+            <div><label>Curso/ciclo</label><select id="gCourse"></select></div>
+            <div><label>Seccion</label><select id="gSection"></select></div>
+          </div>
+          <div class="row">
+            <div><label>Profesor</label><input id="gProfessor" placeholder="Perez, Martin"></div>
+            <div><label>Jefe de practica</label><input id="gJefe" placeholder="Tapia, Mateo"></div>
+            <div><label>Laboratorio N</label><input id="gLab" type="number" min="1" value="1"></div>
+            <div><label>Grupos</label><input id="gCount" type="number" min="1" max="8" value="8"></div>
+          </div>
+          <div class="row">
+            <div><label>Nombre laboratorio</label><input id="gLabName" placeholder="Opcional"></div>
+            <div><label>Seed opcional</label><input id="gSeed" placeholder="opcional"></div>
+          </div>
+          <div class="card">
+            <h3>Asignaciones fijas</h3>
+            <p class="muted">Busca por inicial del apellido y asigna un alumno a un grupo especifico antes del shuffle.</p>
+            <div class="row">
+              <div><label>Inicial apellido</label><input id="gInitial" maxlength="1"></div>
+              <div><label>Alumno</label><select id="gCandidate"></select></div>
+              <div><label>Grupo</label><input id="gForcedGroup" type="number" min="1" max="8" value="1"></div>
+            </div>
+            <div class="actions"><button class="btn secondary" onclick="searchGroupCandidates()">Buscar</button><button class="btn" onclick="addForced()">Agregar fijo</button></div>
+            <div id="forcedList" class="muted"></div>
+          </div>
+          <div class="actions">
+            <button class="btn secondary" onclick="previewGroups()">Vista previa</button>
+            <button class="btn green" onclick="createGroups()">Generar outputs</button>
+          </div>
+          <div id="groupsOut" class="status"></div>
+          <div id="groupsPreview"></div>
+        </div>
+      </section>
+
+      <section id="evaluation" class="screen">
+        <div class="help">Secuencia ideal: primero grupos, luego notas. La app detecta laboratorios creados para la seccion.</div>
+        <div class="panel">
+          <span class="step">Evaluacion</span>
+          <h2>Subir notas y Teammates</h2>
+          <div class="row">
+            <div><label>Proyecto</label><select id="eProject"></select></div>
+            <div><label>Curso/ciclo</label><select id="eCourse"></select></div>
+            <div><label>Seccion</label><select id="eSection"></select></div>
+            <div><label>Laboratorio</label><select id="eLab"></select></div>
+          </div>
+          <div class="card">
+            <h3>Teammates</h3>
+            <label><input id="eUseTm" type="checkbox" checked style="width:auto"> Actualizar %TM y TM_Resp?</label>
+            <label>CSV Teammates</label><input id="eTmFile" type="file" accept=".csv">
+          </div>
+          <div class="card">
+            <h3>Columnas de notas adicionales</h3>
+            <p class="muted">Ejemplos: BB_Lab, Inf_Lab, Quiz_Lab. La app agrega el numero: BB_Lab1, Inf_Lab2, etc.</p>
+            <div id="gradeColumns"></div>
+            <div class="actions"><button class="btn secondary" onclick="addGradeColumn()">Agregar columna</button></div>
+          </div>
+          <div class="actions"><button class="btn green" onclick="applyEvaluation()">Aplicar notas</button></div>
+          <div id="evaluationOut" class="status"></div>
+        </div>
+      </section>
+
+      <section id="absences" class="screen">
+        <div class="panel">
+          <span class="step">Ausentes</span>
+          <h2>Marcar alumnos ausentes</h2>
+          <p class="muted">Impacto: notas custom = 0, Nota_LabN = 0, %TMN = 0%, TMN_Resp? = No.</p>
+          <div class="row">
+            <div><label>Proyecto</label><select id="aProject"></select></div>
+            <div><label>Curso/ciclo</label><select id="aCourse"></select></div>
+            <div><label>Seccion</label><select id="aSection"></select></div>
+            <div><label>Laboratorio</label><select id="aLab"></select></div>
+          </div>
+          <div class="row">
+            <div><label>Inicial apellido</label><input id="aInitial" maxlength="1"></div>
+            <div><label>Alumno</label><select id="aCandidate"></select></div>
+          </div>
+          <div class="actions"><button class="btn secondary" onclick="searchAbsenceCandidates()">Buscar</button><button class="btn" onclick="addAbsent()">Agregar ausente</button><button class="btn red" onclick="applyAbsences()">Confirmar y aplicar</button></div>
+          <div id="absentList" class="muted"></div>
+          <div id="absencesOut" class="status"></div>
+        </div>
+      </section>
+
+      <section id="outputs" class="screen">
+        <div class="panel">
+          <span class="step">Archivos</span>
+          <h2>Outputs generados</h2>
+          <p class="muted">Los archivos quedan guardados en Drive. Cuando hay rutas disponibles, puedes abrirlas o descargarlas desde aqui.</p>
+          <div id="outputsOut" class="status"></div>
+        </div>
+      </section>
+
+      <section id="guide" class="screen">
+        <div class="panel">
+          <span class="step">Ayuda</span>
+          <h2>Guia rapida</h2>
+          <ol>
+            <li><b>Crear estructura:</b> descarga CSV desde Blackboard en Estadisticas -> Actividad del curso -> Descargar.</li>
+            <li><b>Crear grupos:</b> selecciona seccion, profesor, jefe, laboratorio y grupos. Puedes fijar alumnos antes del shuffle.</li>
+            <li><b>Subir notas:</b> selecciona laboratorio ya creado. Puedes subir Teammates, Blackboard CSV/XLS o notas manuales por alumno/grupo.</li>
+            <li><b>Ausentes:</b> busca por inicial de apellido y confirma. Se colocan ceros y TM_Resp? = No.</li>
+            <li><b>Outputs:</b> revisa PDF, CSVs Blackboard, Excel de notas y ZIP final en Drive.</li>
+          </ol>
+        </div>
+      </section>
+    </main>
+  </div>
+
+<script>
+let appStatus = null;
+let forced = {};
+let absent = {};
+let gradeIndex = 0;
+let lastOutputs = {};
+
+const $ = id => document.getElementById(id);
+const jsonHeaders = {'Content-Type': 'application/json'};
+
+document.querySelectorAll('nav button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    btn.classList.add('active');
+    $(btn.dataset.screen).classList.add('active');
+  });
+});
+
+function show(id, msg, ok=true) {
+  const el = $(id);
+  el.className = 'status ' + (ok ? 'ok' : 'err');
+  el.textContent = typeof msg === 'string' ? msg : JSON.stringify(msg, null, 2);
+}
+
+function fillSelect(el, items, label='name', value='path') {
+  el.innerHTML = '';
+  items.forEach(item => {
+    const opt = document.createElement('option');
+    opt.textContent = typeof item === 'string' ? item : item[label];
+    opt.value = typeof item === 'string' ? item : item[value];
+    el.appendChild(opt);
+  });
+}
+
+function table(rows) {
+  if (!rows || !rows.length) return '<p class="muted">Sin datos para mostrar.</p>';
+  const cols = Object.keys(rows[0]);
+  return `<table><thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead><tbody>` +
+    rows.map(r => `<tr>${cols.map(c => `<td>${r[c] ?? ''}</td>`).join('')}</tr>`).join('') +
+    '</tbody></table>';
+}
+
+async function loadStatus() {
+  const res = await fetch('/api/status');
+  appStatus = await res.json();
+  const projects = appStatus.projects || [];
+  const courses = projects.flatMap(p => p.courses || []);
+  const sections = courses.flatMap(c => c.status.sections || []);
+  const labs = courses.flatMap(c => c.status.section_status || []).reduce((acc, s) => acc + (s.labs || []).length, 0);
+  $('statusCards').innerHTML = [
+    ['Workspace', appStatus.workspace],
+    ['Proyectos', projects.length],
+    ['Cursos/ciclos', courses.length],
+    ['Secciones', sections.length],
+    ['Laboratorios', labs],
+  ].map(([a,b]) => `<div class="card"><h3>${a}</h3><p>${b}</p></div>`).join('');
+  show('dashboardOut', 'Estado actualizado.');
+  for (const prefix of ['g','e','a']) setupProjectSelectors(prefix);
+}
+
+function setupProjectSelectors(prefix) {
+  if (!appStatus) return;
+  const p = $(`${prefix}Project`);
+  fillSelect(p, appStatus.projects || []);
+  p.onchange = () => loadCourses(prefix);
+  loadCourses(prefix);
+}
+
+async function loadCourses(prefix) {
+  const p = $(`${prefix}Project`);
+  if (!p.value) return;
+  const res = await fetch(`/api/courses?project_root=${encodeURIComponent(p.value)}`);
+  const courses = await res.json();
+  fillSelect($(`${prefix}Course`), courses);
+  $(`${prefix}Course`).onchange = () => loadSections(prefix);
+  loadSections(prefix);
+}
+
+async function loadSections(prefix) {
+  const c = $(`${prefix}Course`);
+  if (!c.value) return;
+  const res = await fetch(`/api/sections?course_root=${encodeURIComponent(c.value)}`);
+  const sections = await res.json();
+  fillSelect($(`${prefix}Section`), sections);
+  $(`${prefix}Section`).onchange = () => loadLabs(prefix);
+  loadLabs(prefix);
+}
+
+async function loadLabs(prefix) {
+  const c = $(`${prefix}Course`);
+  const s = $(`${prefix}Section`);
+  const labEl = $(`${prefix}Lab`);
+  if (!labEl || !c.value || !s.value) return;
+  const res = await fetch(`/api/labs?course_root=${encodeURIComponent(c.value)}&section=${encodeURIComponent(s.value)}`);
+  const labs = await res.json();
+  fillSelect(labEl, labs.map(l => `Laboratorio ${l}`));
+  [...labEl.options].forEach((o, i) => o.value = labs[i] || '');
+}
+
+async function previewStructure() {
+  try {
+    const fd = new FormData();
+    fd.append('email_domain', $('sDomain').value);
+    fd.append('csv', $('sCsv').files[0]);
+    const res = await fetch('/api/structure/preview', {method:'POST', body:fd});
+    const data = await res.json();
+    if (!res.ok) throw data;
+    show('structureOut', `CSV valido. Estudiantes detectados: ${data.students_count}`);
+    $('structurePreview').innerHTML = table(data.preview);
+  } catch (err) { show('structureOut', err, false); }
+}
+
+async function createStructure() {
+  try {
+    const fd = new FormData();
+    fd.append('project_name', $('sProject').value);
+    fd.append('course_cycle_name', $('sCourse').value);
+    fd.append('section', $('sSection').value);
+    fd.append('email_domain', $('sDomain').value);
+    fd.append('overwrite', $('sOverwrite').checked ? '1' : '0');
+    fd.append('csv', $('sCsv').files[0]);
+    const res = await fetch('/api/structure/create', {method:'POST', body:fd});
+    const data = await res.json();
+    if (!res.ok) throw data;
+    lastOutputs = {Lista: data.list_path, Notas: data.notas_path};
+    show('structureOut', `Estructura creada. Lista: ${data.list_path}\nNotas: ${data.notas_path}`);
+    loadStatus();
+  } catch (err) { show('structureOut', err, false); }
+}
+
+async function searchGroupCandidates() {
+  const url = `/api/students?course_root=${encodeURIComponent($('gCourse').value)}&section=${encodeURIComponent($('gSection').value)}&initial=${encodeURIComponent($('gInitial').value)}`;
+  const students = await (await fetch(url)).json();
+  fillSelect($('gCandidate'), students.map(s => ({name:`${s.code} | ${s.name}`, path:s.code})));
+}
+
+function addForced() {
+  const code = $('gCandidate').value;
+  if (!code) return;
+  forced[code] = Number($('gForcedGroup').value);
+  $('forcedList').innerHTML = Object.entries(forced).map(([c,g]) => `<span class="pill">${c} -> Grupo ${g}</span>`).join(' ');
+}
+
+function groupPayload() {
+  return {
+    course_root: $('gCourse').value,
+    section: $('gSection').value,
+    professor: $('gProfessor').value,
+    jefe: $('gJefe').value,
+    lab_number: Number($('gLab').value),
+    lab_name: $('gLabName').value,
+    group_count: Number($('gCount').value),
+    seed: $('gSeed').value ? Number($('gSeed').value) : null,
+    forced_assignments: forced
+  };
+}
+
+async function previewGroups() {
+  try {
+    const res = await fetch('/api/groups/preview', {method:'POST', headers:jsonHeaders, body:JSON.stringify(groupPayload())});
+    const data = await res.json();
+    if (!res.ok) throw data;
+    const rows = data.groups.flatMap((group, i) => group.map(s => ({Grupo:i+1, Codigo:s.code, Nombre:s.name})));
+    show('groupsOut', `Vista previa lista. Tamaños: ${data.group_sizes.join(', ')}`);
+    $('groupsPreview').innerHTML = table(rows);
+  } catch (err) { show('groupsOut', err, false); }
+}
+
+async function createGroups() {
+  try {
+    const res = await fetch('/api/groups/create', {method:'POST', headers:jsonHeaders, body:JSON.stringify(groupPayload())});
+    const data = await res.json();
+    if (!res.ok) throw data;
+    lastOutputs = {PDF:data.pdf_path, GroupsCSV:data.groups_csv, MembersCSV:data.members_csv, ZIP:data.zip_path, Notas:data.notas_path};
+    show('groupsOut', `Grupos generados.\nPDF: ${data.pdf_path}\nZIP: ${data.zip_path}`);
+    loadLabs('e'); loadLabs('a'); renderOutputs();
+  } catch (err) { show('groupsOut', err, false); }
+}
+
+function addGradeColumn() {
+  gradeIndex += 1;
+  const id = `grade${gradeIndex}`;
+  const html = `<div class="card" data-grade="${id}">
+    <div class="row">
+      <div><label>Nombre base</label><input id="${id}Base" placeholder="BB_Lab"></div>
+      <div><label>Metodo</label><select id="${id}Method"><option value="1">Archivo Blackboard CSV/XLS</option><option value="2">Manual por alumno</option><option value="3">Manual por grupo</option></select></div>
+      <div><label>Archivo Blackboard</label><input id="${id}File" type="file" accept=".csv,.xls"></div>
+    </div>
+    <label>Valores manuales</label><textarea id="${id}Values" placeholder="Por alumno: 20250052=4&#10;Por grupo: 1=4"></textarea>
+  </div>`;
+  $('gradeColumns').insertAdjacentHTML('beforeend', html);
+}
+
+async function applyEvaluation() {
+  try {
+    const lab = Number($('eLab').value);
+    const fd = new FormData();
+    fd.append('course_root', $('eCourse').value);
+    fd.append('section', $('eSection').value);
+    fd.append('lab_number', lab);
+    const templates = [];
+    const manualStudent = {};
+    const manualGroup = {};
+    // Payloads are keyed by the template's position, never by a column name the
+    // browser computed: the server owns how a base name becomes a column name.
+    document.querySelectorAll('[data-grade]').forEach(card => {
+      const id = card.dataset.grade;
+      const base = $(`${id}Base`).value.trim();
+      const method = $(`${id}Method`).value;
+      if (!base) return;
+      const index = templates.length;
+      templates.push({base_name: base, method});
+      if (method === '1' && $(`${id}File`).files[0]) fd.append(`grade_file__${index}`, $(`${id}File`).files[0]);
+      if (method === '2') manualStudent[index] = parseLines($(`${id}Values`).value);
+      if (method === '3') manualGroup[index] = parseLines($(`${id}Values`).value);
+    });
+    fd.append('templates', JSON.stringify(templates));
+    fd.append('manual_student_grades', JSON.stringify(manualStudent));
+    fd.append('manual_group_grades', JSON.stringify(manualGroup));
+    fd.append('absent_codes', JSON.stringify([]));
+    if ($('eUseTm').checked && $('eTmFile').files[0]) fd.append('teammates', $('eTmFile').files[0]);
+    const res = await fetch('/api/evaluation/apply', {method:'POST', body:fd});
+    const data = await res.json();
+    if (!res.ok) throw data;
+    lastOutputs = {Notas:data.notas_path};
+    show('evaluationOut', `Notas actualizadas.\nArchivo: ${data.notas_path}`);
+    renderOutputs();
+  } catch (err) { show('evaluationOut', err, false); }
+}
+
+function parseLines(text) {
+  const obj = {};
+  text.split(/\n/).forEach(line => {
+    if (!line.includes('=')) return;
+    const [k,v] = line.split('=');
+    obj[k.trim()] = v.trim();
+  });
+  return obj;
+}
+
+async function searchAbsenceCandidates() {
+  const url = `/api/students?course_root=${encodeURIComponent($('aCourse').value)}&section=${encodeURIComponent($('aSection').value)}&initial=${encodeURIComponent($('aInitial').value)}`;
+  const students = await (await fetch(url)).json();
+  fillSelect($('aCandidate'), students.map(s => ({name:`${s.code} | ${s.name}`, path:s.code})));
+}
+
+function addAbsent() {
+  const code = $('aCandidate').value;
+  if (!code) return;
+  absent[code] = true;
+  $('absentList').innerHTML = Object.keys(absent).map(c => `<span class="pill">${c}</span>`).join(' ');
+}
+
+async function applyAbsences() {
+  try {
+    const res = await fetch('/api/absences/apply', {method:'POST', headers:jsonHeaders, body:JSON.stringify({
+      course_root:$('aCourse').value, section:$('aSection').value, lab_number:Number($('aLab').value), absent_codes:Object.keys(absent)
+    })});
+    const data = await res.json();
+    if (!res.ok) throw data;
+    lastOutputs = {Notas:data.notas_path};
+    show('absencesOut', `Ausentes marcados: ${data.absences_updated}\nNotas: ${data.notas_path}`);
+    renderOutputs();
+  } catch (err) { show('absencesOut', err, false); }
+}
+
+function renderOutputs() {
+  const entries = Object.entries(lastOutputs);
+  $('outputsOut').innerHTML = entries.length ? entries.map(([k,v]) => `<b>${k}</b>: ${v}<br>`).join('') : 'Aun no hay outputs en esta sesion.';
+}
+
+loadStatus();
+addGradeColumn();
+</script>
+</body>
+</html>

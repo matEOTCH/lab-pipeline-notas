@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# macOS
+.DS_Store
+
+# Credenciales / secretos (por si algun dia se agregan)
+.env
+credentials.json
+token.json
+client_secret*.json
+
+# Datos reales de cursos (listas, notas, exports de Blackboard) - no deben
+# subirse a git; viven en Google Drive, no en este repo.
+*.xlsx
+*.csv
